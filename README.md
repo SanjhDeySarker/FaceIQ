@@ -1,36 +1,41 @@
-# 🧠 FaceIQ — AI-Powered Face Detection & Comparison SaaS
+# FaceIQ Platform
 
-**FaceIQ** is a cloud-based SaaS platform for intelligent **face detection**, **face comparison**, and **facial metadata analysis**.  
-It provides developers and businesses with a simple API and dashboard to **analyze, compare, and verify faces** with customizable confidence thresholds — all built with cutting-edge AI.
+A complete face detection, comparison, and metadata extraction SaaS platform.
 
----
+## Quick Start
 
-## 🚀 Features
+1. Copy all files to your project directory
+2. Run: `docker-compose up --build`
+3. Access:
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
 
-- 🧩 **Face Detection** – Detect multiple faces with bounding boxes, landmarks, and confidence scores.  
-- 🔍 **Face Comparison** – Verify whether two faces match with a user-defined confidence threshold.  
-- 📊 **Face Metadata** – Extract useful attributes such as confidence, quality, and optional demographic info.  
-- ☁️ **SaaS API** – RESTful API for easy integration with your own apps.  
-- 🔑 **User Authentication** – Secure login and API key access via JWT.  
-- ⚙️ **Threshold Customization** – Define match criteria per user (e.g., 70%–90%).  
-- 💾 **Image Storage** – Store user uploads and embeddings in MongoDB / AWS S3.  
-- 🧱 **Scalable Architecture** – Built with Python (FastAPI), React, and MongoDB.  
+## Features
 
----
+- Face detection with bounding boxes
+- Face comparison and verification
+- Age, gender, emotion detection
+- Configurable similarity threshold
+- JWT authentication
+- MongoDB storage
+- React frontend with TailwindCSS
 
-## 🏗️ Tech Stack
+## Default Credentials
 
-| Layer | Technology |
-|-------|-------------|
-| **Frontend** | React + TailwindCSS + ShadCN/UI |
-| **Backend** | FastAPI (Python 3.11+) |
-| **Database** | MongoDB (async with Motor) |
-| **AI/ML** | DeepFace / InsightFace for embeddings |
-| **Storage** | AWS S3 or GridFS (fallback) |
-| **Auth** | JWT or API Key |
-| **Containerization** | Docker + Docker Compose |
+Register a new account through the frontend interface.
 
----
+## API Endpoints
 
-## 📂 Project Structure
+- `POST /api/v1/auth/register` - User registration
+- `POST /api/v1/auth/login` - User login
+- `POST /api/v1/images/upload` - Upload image
+- `POST /api/v1/faces/verify` - Compare faces
+- `GET /api/v1/users/profile` - Get user profile
 
+## Development
+
+- Backend: FastAPI with Python 3.11
+- Frontend: React 18 with Vite
+- Database: MongoDB
+- Cache: Redis
