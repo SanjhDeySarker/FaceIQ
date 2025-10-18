@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import Button from '../components/ui/button';
-import { Upload, Compare } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import { Upload, GitCompare } from 'lucide-react'; // Changed from Compare to GitCompare
 
 const Verify = () => {
   const [image1, setImage1] = useState(null);
@@ -28,6 +28,7 @@ const Verify = () => {
 
     setComparing(true);
     
+    // Simulate API call
     setTimeout(() => {
       setResult({
         similarity_score: 85.2,
@@ -117,7 +118,7 @@ const Verify = () => {
           size="lg"
           className="px-8"
         >
-          <Compare className="w-4 h-4 mr-2" />
+          <GitCompare className="w-4 h-4 mr-2" /> {/* Changed to GitCompare */}
           {comparing ? 'Comparing...' : 'Compare Faces'}
         </Button>
       </div>

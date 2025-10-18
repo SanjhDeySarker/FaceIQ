@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import Button from '../components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+import Button from '../components/ui/Button';
 import { Upload, Users, CheckCircle, XCircle } from 'lucide-react';
 
 const Dashboard = () => {
@@ -12,25 +12,19 @@ const Dashboard = () => {
     if (!file) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      setTimeout(() => {
-        setUploadResult({
-          image_id: 'img_123',
-          face_count: 2,
-          faces: [
-            { bbox: [100, 100, 200, 200], confidence: 0.98, age: 25, gender: 'male' },
-            { bbox: [400, 150, 180, 180], confidence: 0.96, age: 30, gender: 'female' }
-          ]
-        });
-        setUploading(false);
-      }, 2000);
-    } catch (error) {
-      console.error('Upload failed:', error);
+    
+    // Simulate API call for now
+    setTimeout(() => {
+      setUploadResult({
+        image_id: 'img_123',
+        face_count: 2,
+        faces: [
+          { bbox: [100, 100, 200, 200], confidence: 0.98, age: 25, gender: 'male' },
+          { bbox: [400, 150, 180, 180], confidence: 0.96, age: 30, gender: 'female' }
+        ]
+      });
       setUploading(false);
-    }
+    }, 2000);
   };
 
   return (
