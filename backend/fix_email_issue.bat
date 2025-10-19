@@ -1,38 +1,43 @@
+@echo off
+echo 🔧 Fixing Email Validator Issue Permanently...
+echo.
+
+cd /d C:\FaceIQ\backend
+call venv\Scripts\activate.bat
+
+echo 📝 Updating schemas to remove email validation dependency...
+python -c "
+# Update schemas.py to remove EmailStr dependency
+schemas_content = '''
 from datetime import datetime
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field, validator
-from pydantic_core import core_schema
 import re
 from bson import ObjectId
 
 class PyObjectId(ObjectId):
     @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type, _handler):
-        return core_schema.no_info_after_validator_function(
-            cls.validate,
-            core_schema.str_schema(),
-            serialization=core_schema.to_string_ser_schema(),
-        )
+    def __get_validators__(cls):
+        yield cls.validate
 
     @classmethod
     def validate(cls, v):
         if not ObjectId.is_valid(v):
-            raise ValueError("Invalid objectid")
+            raise ValueError('Invalid objectid')
         return ObjectId(v)
 
     @classmethod
-    def __get_pydantic_json_schema__(cls, _core_schema, handler):
-        return handler(core_schema.str_schema())
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type='string')
 
 class UserBase(BaseModel):
-    email: str  # Changed from EmailStr to regular string
+    email: str
 
     @validator('email')
     def validate_email(cls, v):
-        # Simple email validation without external dependencies
         if not v or '@' not in v or '.' not in v:
             raise ValueError('Invalid email address')
-        return v.lower().strip()  # Normalize email
+        return v.lower().strip()
 
 class UserCreate(UserBase):
     password: str
@@ -44,7 +49,7 @@ class UserCreate(UserBase):
         return v
 
 class User(UserBase):
-    id: Optional[PyObjectId] = Field(alias="_id")
+    id: Optional[PyObjectId] = Field(alias='_id')
     hashed_password: str
     api_key: str
     threshold: float = Field(default=75.0, ge=70.0, le=90.0)
@@ -99,3 +104,14 @@ class FaceComparisonResponse(BaseModel):
 
 class ThresholdUpdate(BaseModel):
     threshold: float = Field(ge=70.0, le=90.0)
+'''
+
+with open('app/models/schemas.py', 'w', encoding='utf-8') as f:
+    f.write(schemas_content)
+print('✅ Schemas updated successfully!')
+"
+
+echo 🚀 Starting backend...
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+pause
