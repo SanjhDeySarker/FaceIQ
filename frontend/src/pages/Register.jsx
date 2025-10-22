@@ -19,8 +19,21 @@ const Register = () => {
     setLoading(true);
     setError('');
 
+    // Client-side validation
     if (password !== confirmPassword) {
       setError("Passwords don't match");
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      setLoading(false);
+      return;
+    }
+
+    if (!email.includes('@') || !email.includes('.')) {
+      setError("Please enter a valid email address");
       setLoading(false);
       return;
     }
@@ -32,7 +45,9 @@ const Register = () => {
         state: { message: 'Registration successful! Please log in.' } 
       });
     } else {
-      setError(result.error);
+      // Extract error message from response
+      const errorMessage = result.error?.response?.data?.detail || result.error || 'Registration failed';
+      setError(errorMessage);
     }
     
     setLoading(false);
@@ -47,8 +62,8 @@ const Register = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                {error}
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+                {error} {/* Now rendering string, not object */}
               </div>
             )}
             
