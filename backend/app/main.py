@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import uuid
@@ -44,9 +44,16 @@ async def health_check():
     return {"status": "healthy"}
 
 @app.post("/api/v1/auth/register")
-async def register(email: str, password: str):
-    if email in users_db:
+async def register(email: str = Form(...), password: str = Form(...)):
+    if email in [user["email"] for user in users_db.values()]:
         raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Simple email validation
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=422, detail="Invalid email format")
+    
+    if len(password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
     
     user_id = str(uuid.uuid4())
     users_db[user_id] = {
@@ -61,7 +68,7 @@ async def register(email: str, password: str):
     return users_db[user_id]
 
 @app.post("/api/v1/auth/login")
-async def login(username: str, password: str):
+async def login(username: str = Form(...), password: str = Form(...)):
     user = None
     for user_data in users_db.values():
         if user_data["email"] == username:
@@ -120,7 +127,7 @@ async def upload_image(file: UploadFile = File(...)):
 async def compare_faces(
     image1: UploadFile = File(...),
     image2: UploadFile = File(...),
-    threshold: float = 75.0
+    threshold: float = Form(75.0)
 ):
     # Mock face comparison
     similarity_score = 85.2
