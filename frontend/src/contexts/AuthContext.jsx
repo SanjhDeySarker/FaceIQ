@@ -33,6 +33,7 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true };
     } catch (error) {
+      console.error('Login error:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || 'Login failed' 
@@ -45,6 +46,7 @@ export const AuthProvider = ({ children }) => {
       const response = await authAPI.register(userData);
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Registration error:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || 'Registration failed' 
