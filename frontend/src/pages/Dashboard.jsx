@@ -1,30 +1,80 @@
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import { Upload, Users, CheckCircle, XCircle } from 'lucide-react';
+import { imagesAPI } from '../api';
 
 const Dashboard = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  const [error, setError] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
 
-  const handleFileUpload = async (event) => {
+  const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    setUploading(true);
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file (JPEG, PNG, etc.)');
+      setSelectedFile(null);
+      setFilePreview(null);
+      return;
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB');
+      setSelectedFile(null);
+      setFilePreview(null);
+      return;
+    }
+
+    setSelectedFile(file);
+    setError('');
     
-    // Simulate API call for now
-    setTimeout(() => {
-      setUploadResult({
-        image_id: 'img_123',
-        face_count: 2,
-        faces: [
-          { bbox: [100, 100, 200, 200], confidence: 0.98, age: 25, gender: 'male' },
-          { bbox: [400, 150, 180, 180], confidence: 0.96, age: 30, gender: 'female' }
-        ]
-      });
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setFilePreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setError('Please select a file first');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+    
+    try {
+      const response = await imagesAPI.upload(selectedFile);
+      setUploadResult(response.data);
+      setSelectedFile(null);
+      setFilePreview(null);
+      
+      // Clear file input
+      const fileInput = document.getElementById('file-upload');
+      if (fileInput) fileInput.value = '';
+      
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Upload failed. Please try again.');
+      console.error('Upload error:', err);
+    } finally {
       setUploading(false);
-    }, 2000);
+    }
+  };
+
+  const clearResults = () => {
+    setUploadResult(null);
+    setError('');
+    setSelectedFile(null);
+    setFilePreview(null);
+    const fileInput = document.getElementById('file-upload');
+    if (fileInput) fileInput.value = '';
   };
 
   return (
@@ -33,86 +83,112 @@ const Dashboard = () => {
         <h1 className="text-3xl font-bold">Dashboard</h1>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <Users className="h-8 w-8 text-blue-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Images</p>
-                <p className="text-2xl font-bold">24</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <CheckCircle className="h-8 w-8 text-green-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Successful Verifications</p>
-                <p className="text-2xl font-bold">156</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <XCircle className="h-8 w-8 text-red-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Failed Verifications</p>
-                <p className="text-2xl font-bold">12</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle>Upload Image for Face Detection</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-            <Upload className="mx-auto h-12 w-12 text-gray-400" />
-            <div className="mt-4">
-              <label htmlFor="file-upload" className="cursor-pointer">
-                <Button as="span">Choose Image</Button>
-                <input
-                  id="file-upload"
-                  name="file-upload"
-                  type="file"
-                  className="sr-only"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                />
-              </label>
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
             </div>
-            <p className="mt-2 text-sm text-gray-600">
+          )}
+          
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            {filePreview ? (
+              <div className="mb-4">
+                <img 
+                  src={filePreview} 
+                  alt="Preview" 
+                  className="mx-auto max-h-48 object-contain rounded"
+                />
+                <p className="mt-2 text-sm text-gray-600">{selectedFile?.name}</p>
+                <p className="text-xs text-gray-500">
+                  {(selectedFile?.size / (1024 * 1024)).toFixed(2)} MB
+                </p>
+              </div>
+            ) : (
+              <div className="text-4xl mb-4">📷</div>
+            )}
+            
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  <Button as="span" variant="outline">
+                    Choose Image
+                  </Button>
+                  <input
+                    id="file-upload"
+                    name="file-upload"
+                    type="file"
+                    className="sr-only"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                  />
+                </label>
+              </div>
+              
+              {selectedFile && (
+                <div className="space-x-2">
+                  <Button 
+                    onClick={handleUpload}
+                    disabled={uploading}
+                  >
+                    {uploading ? 'Uploading...' : 'Upload Image'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={clearResults}
+                    disabled={uploading}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
+            
+            <p className="mt-4 text-sm text-gray-600">
               PNG, JPG, JPEG up to 10MB
             </p>
           </div>
 
           {uploading && (
             <div className="mt-4 text-center">
-              <p>Processing image...</p>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="mt-2">Processing image...</p>
             </div>
           )}
 
           {uploadResult && (
             <div className="mt-6 p-4 bg-green-50 rounded-lg">
-              <h3 className="font-semibold text-green-800">Detection Results</h3>
-              <p className="text-green-700">
-                Found {uploadResult.face_count} face(s) in the image
-              </p>
-              {uploadResult.faces.map((face, index) => (
-                <div key={index} className="mt-2 text-sm">
-                  Face {index + 1}: {face.gender || 'Unknown'}, {face.age || 'Unknown age'} 
-                  (Confidence: {(face.confidence * 100).toFixed(1)}%)
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-semibold text-green-800">Detection Results</h3>
+                  <p className="text-green-700">
+                    Found {uploadResult.face_count} face(s) in the image
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={clearResults}>
+                  Clear
+                </Button>
+              </div>
+              
+              {uploadResult.faces && uploadResult.faces.map((face, index) => (
+                <div key={index} className="mt-3 p-3 bg-white rounded border">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <strong>Face {index + 1}</strong>
+                    </div>
+                    <div className="text-right">
+                      Confidence: {(face.confidence * 100).toFixed(1)}%
+                    </div>
+                    <div>Gender: {face.gender || 'Unknown'}</div>
+                    <div>Age: {face.age || 'Unknown'}</div>
+                    <div>Quality: {(face.quality * 100).toFixed(1)}%</div>
+                    <div>
+                      BBox: {face.bbox?.join(', ') || 'N/A'}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
