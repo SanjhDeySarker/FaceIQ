@@ -1,9 +1,11 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import os
 import uuid
 from datetime import datetime
 from typing import Optional
+import shutil
 
 app = FastAPI(
     title="FaceSaaS Platform",
@@ -19,6 +21,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve uploaded files statically
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# Create uploads directory if it doesn't exist
+os.makedirs("uploads", exist_ok=True)
 
 # In-memory storage (replace with database later)
 users_db = {}
@@ -45,8 +53,10 @@ async def health_check():
 
 @app.post("/api/v1/auth/register")
 async def register(email: str = Form(...), password: str = Form(...)):
-    if email in [user["email"] for user in users_db.values()]:
-        raise HTTPException(status_code=400, detail="Email already registered")
+    # Check if email already exists
+    for user_data in users_db.values():
+        if user_data["email"] == email:
+            raise HTTPException(status_code=400, detail="Email already registered")
     
     # Simple email validation
     if "@" not in email or "." not in email:
@@ -83,45 +93,79 @@ async def login(username: str = Form(...), password: str = Form(...)):
 
 @app.post("/api/v1/images/upload")
 async def upload_image(file: UploadFile = File(...)):
-    if not file.content_type.startswith('image/'):
+    print(f"Received file: {file.filename}, type: {file.content_type}")
+    
+    if not file.content_type or not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="File must be an image")
     
-    # Read file
-    contents = await file.read()
-    
-    # Save file locally
-    os.makedirs("uploads", exist_ok=True)
-    file_extension = os.path.splitext(file.filename)[1]
-    file_name = f"{uuid.uuid4()}{file_extension}"
-    file_path = f"uploads/{file_name}"
-    
-    with open(file_path, "wb") as f:
-        f.write(contents)
-    
-    # Mock face detection
-    faces = [
-        {
-            "face_id": str(uuid.uuid4()),
-            "bbox": [100, 100, 200, 200],
-            "confidence": 0.98,
-            "age": 25,
-            "gender": "male",
-            "quality": 0.9
+    try:
+        # Read file
+        contents = await file.read()
+        
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="File is empty")
+        
+        # Validate file size (10MB limit)
+        if len(contents) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File size must be less than 10MB")
+        
+        # Save file locally
+        file_extension = os.path.splitext(file.filename)[1] or '.jpg'
+        file_name = f"{uuid.uuid4()}{file_extension}"
+        file_path = f"uploads/{file_name}"
+        
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        print(f"File saved successfully: {file_path}")
+        
+        # Mock face detection - always return some faces for testing
+        faces = [
+            {
+                "face_id": str(uuid.uuid4()),
+                "bbox": [100, 100, 200, 200],
+                "confidence": 0.98,
+                "age": 25,
+                "gender": "male",
+                "quality": 0.9
+            },
+            {
+                "face_id": str(uuid.uuid4()),
+                "bbox": [400, 150, 180, 180],
+                "confidence": 0.96,
+                "age": 30,
+                "gender": "female", 
+                "quality": 0.8
+            }
+        ]
+        
+        # Store image info
+        image_id = str(uuid.uuid4())
+        images_db[image_id] = {
+            "image_id": image_id,
+            "file_name": file.filename,
+            "file_path": file_path,
+            "file_url": f"/uploads/{file_name}",
+            "upload_time": datetime.utcnow().isoformat(),
+            "faces": faces,
+            "face_count": len(faces)
         }
-    ]
-    
-    # Store image info
-    image_id = str(uuid.uuid4())
-    images_db[image_id] = {
-        "image_id": image_id,
-        "file_name": file.filename,
-        "file_path": file_path,
-        "upload_time": datetime.utcnow().isoformat(),
-        "faces": faces,
-        "face_count": len(faces)
-    }
-    
-    return images_db[image_id]
+        
+        response_data = {
+            "image_id": image_id,
+            "file_name": file.filename,
+            "file_url": f"/uploads/{file_name}",
+            "face_count": len(faces),
+            "faces": faces,
+            "upload_time": datetime.utcnow().isoformat()
+        }
+        
+        print(f"Returning response: {response_data}")
+        return response_data
+        
+    except Exception as e:
+        print(f"Upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @app.post("/api/v1/faces/compare")
 async def compare_faces(
@@ -129,28 +173,72 @@ async def compare_faces(
     image2: UploadFile = File(...),
     threshold: float = Form(75.0)
 ):
-    # Mock face comparison
-    similarity_score = 85.2
-    match_status = "MATCH" if similarity_score >= threshold else "NOT_MATCH"
+    print("Comparing faces...")
     
-    return {
-        "similarity_score": similarity_score,
-        "threshold_used": threshold,
-        "match_status": match_status,
-        "probe_confidence": 0.99,
-        "candidate_confidence": 0.97
-    }
+    # Validate files
+    for file in [image1, image2]:
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Both files must be images")
+    
+    try:
+        # Read both files
+        await image1.read()
+        await image2.read()
+        
+        # Mock face comparison - always return a result for testing
+        similarity_score = 85.2
+        match_status = "MATCH" if similarity_score >= threshold else "NOT_MATCH"
+        
+        result = {
+            "similarity_score": similarity_score,
+            "threshold_used": threshold,
+            "match_status": match_status,
+            "probe_confidence": 0.99,
+            "candidate_confidence": 0.97,
+            "message": "Comparison completed successfully"
+        }
+        
+        print(f"Comparison result: {result}")
+        return result
+        
+    except Exception as e:
+        print(f"Comparison error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Comparison failed: {str(e)}")
+
+@app.get("/api/v1/images/my-images")
+async def get_my_images():
+    # Return all images for demo
+    return list(images_db.values())
 
 @app.get("/api/v1/users/profile")
 async def get_profile():
-    # Mock user profile
-    return {
-        "id": "mock-user-id",
-        "email": "user@example.com",
-        "api_key": "mock-api-key-123",
-        "threshold": 75.0,
-        "created_at": datetime.utcnow().isoformat()
-    }
+    # Mock user profile - return first user or create one
+    if users_db:
+        user = list(users_db.values())[0]
+        return user
+    else:
+        # Create a mock user if none exists
+        user_id = str(uuid.uuid4())
+        mock_user = {
+            "id": user_id,
+            "email": "demo@example.com",
+            "api_key": "demo-api-key-123",
+            "threshold": 75.0,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        return mock_user
+
+@app.patch("/api/v1/users/threshold")
+async def update_threshold(threshold: float):
+    if threshold < 70 or threshold > 90:
+        raise HTTPException(status_code=422, detail="Threshold must be between 70 and 90")
+    
+    # Update first user's threshold for demo
+    if users_db:
+        user_id = list(users_db.keys())[0]
+        users_db[user_id]["threshold"] = threshold
+    
+    return {"message": "Threshold updated successfully", "new_threshold": threshold}
 
 if __name__ == "__main__":
     import uvicorn
