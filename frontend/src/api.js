@@ -103,6 +103,32 @@ export const facesAPI = {
   },
 };
 
+// Users API - ADDED THIS MISSING EXPORT
+export const usersAPI = {
+  getProfile: async () => {
+    return api.get('/users/profile');
+  },
+
+  updateProfile: async (userData) => {
+    return api.put('/users/profile', userData);
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    return api.put('/users/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword
+    });
+  },
+
+  deleteAccount: async () => {
+    return api.delete('/users/account');
+  },
+
+  getUsageStats: async () => {
+    return api.get('/users/usage-stats');
+  }
+};
+
 // Authentication API
 export const authAPI = {
   login: async (email, password) => {
@@ -166,6 +192,26 @@ export const mockAPI = {
         });
       }, 1500);
     });
+  },
+
+  // Mock users API for fallback
+  users: {
+    getProfile: async () => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            data: {
+              id: 'mock_user_1',
+              email: 'demo@example.com',
+              created_at: new Date().toISOString(),
+              image_count: 5,
+              face_detection_count: 12,
+              subscription: 'free'
+            }
+          });
+        }, 1000);
+      });
+    }
   }
 };
 
