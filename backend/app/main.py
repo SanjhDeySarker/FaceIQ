@@ -1,150 +1,245 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-import uvicorn
 import os
-from datetime import datetime
 import uuid
+from datetime import datetime
+from typing import Optional
+import shutil
 
 app = FastAPI(
-    title="Face Detection API",
-    description="API for face detection and analysis",
-    version="1.0.0"
+    title="FaceSaaS Platform",
+    version="1.0.0",
+    docs_url="/docs"
 )
 
-# CORS middleware - IMPORTANT for frontend connection
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"],  # React/Vite dev server
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Create uploads directory if it doesn't exist
+# FIX: Create uploads directory FIRST, before mounting it
 os.makedirs("uploads", exist_ok=True)
 
-# Serve uploaded files statically
+# FIX: Now mount the static files directory AFTER creating it
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+# In-memory storage (replace with database later)
+users_db = {}
+images_db = {}
+
+# Simple authentication
+def verify_password(plain_password, hashed_password):
+    return plain_password == hashed_password  # In production, use proper hashing
+
+def get_password_hash(password):
+    return password  # In production, use proper hashing
+
+def create_access_token(data: dict):
+    return f"mock-token-{uuid.uuid4()}"
+
+# Routes
 @app.get("/")
 async def root():
-    return {"message": "Face Detection API is running!", "status": "healthy"}
+    return {"message": "FaceSaaS Platform API", "version": "1.0.0"}
 
-# Add the exact endpoint your frontend is looking for
-@app.get("/api/v1/health")
-async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
-
-# Also keep the shorter version
 @app.get("/health")
-async def health_check_short():
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+async def health_check():
+    return {"status": "healthy"}
 
-@app.post("/api/v1/upload")
+@app.post("/api/v1/auth/register")
+async def register(email: str = Form(...), password: str = Form(...)):
+    # Check if email already exists
+    for user_data in users_db.values():
+        if user_data["email"] == email:
+            raise HTTPException(status_code=400, detail="Email already registered")
+   
+    # Simple email validation
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=422, detail="Invalid email format")
+   
+    if len(password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+   
+    user_id = str(uuid.uuid4())
+    users_db[user_id] = {
+        "id": user_id,
+        "email": email,
+        "hashed_password": get_password_hash(password),
+        "api_key": f"api-key-{uuid.uuid4()}",
+        "threshold": 75.0,
+        "created_at": datetime.utcnow().isoformat()
+    }
+   
+    return users_db[user_id]
+
+@app.post("/api/v1/auth/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    user = None
+    for user_data in users_db.values():
+        if user_data["email"] == username:
+            user = user_data
+            break
+   
+    if not user or not verify_password(password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+   
+    access_token = create_access_token({"sub": user["email"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/api/v1/images/upload")
 async def upload_image(file: UploadFile = File(...)):
-    """
-    Upload an image for face detection
-    """
+    print(f"Received file: {file.filename}, type: {file.content_type}")
+   
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+   
     try:
-        print(f"📨 Received upload request for file: {file.filename}")
-        
-        # Validate file type
-        if not file.content_type.startswith('image/'):
-            raise HTTPException(status_code=400, detail="File must be an image")
-        
-        # Validate file size (10MB limit)
+        # Read file
         contents = await file.read()
+       
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="File is empty")
+       
+        # Validate file size (10MB limit)
         if len(contents) > 10 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="File size must be less than 10MB")
-        
-        # Generate unique filename
-        file_extension = os.path.splitext(file.filename)[1]
-        unique_filename = f"{uuid.uuid4()}{file_extension}"
-        file_path = os.path.join("uploads", unique_filename)
-        
-        # Save the file
+            raise HTTPException(status_code=413, detail="File size must be less than 10MB")
+       
+        # Save file locally
+        file_extension = os.path.splitext(file.filename)[1] or '.jpg'
+        file_name = f"{uuid.uuid4()}{file_extension}"
+        file_path = f"uploads/{file_name}"
+       
         with open(file_path, "wb") as f:
             f.write(contents)
-        
-        print(f"✅ File saved: {file_path}")
-        
-        # Mock face detection data
-        mock_faces = [
+       
+        print(f"File saved successfully: {file_path}")
+       
+        # Mock face detection - always return some faces for testing
+        faces = [
             {
                 "face_id": str(uuid.uuid4()),
                 "bbox": [100, 100, 200, 200],
-                "confidence": 0.95,
+                "confidence": 0.98,
                 "age": 25,
                 "gender": "male",
-                "quality": 0.89,
-                "emotions": {"happy": 85, "neutral": 10, "surprised": 5}
+                "quality": 0.9
             },
             {
                 "face_id": str(uuid.uuid4()),
                 "bbox": [400, 150, 180, 180],
-                "confidence": 0.87,
-                "age": 32,
-                "gender": "female", 
-                "quality": 0.78,
-                "emotions": {"happy": 70, "neutral": 25, "sad": 5}
+                "confidence": 0.96,
+                "age": 30,
+                "gender": "female",
+                "quality": 0.8
             }
         ]
-        
-        response_data = {
-            "image_id": str(uuid.uuid4()),
+       
+        # Store image info
+        image_id = str(uuid.uuid4())
+        images_db[image_id] = {
+            "image_id": image_id,
             "file_name": file.filename,
-            "file_size": len(contents),
-            "file_url": f"/uploads/{unique_filename}",
-            "face_count": len(mock_faces),
-            "faces": mock_faces,
-            "upload_time": datetime.now().isoformat(),
-            "processing_time": "0.5s",
-            "message": "Face detection completed successfully"
+            "file_path": file_path,
+            "file_url": f"/uploads/{file_name}",
+            "upload_time": datetime.utcnow().isoformat(),
+            "faces": faces,
+            "face_count": len(faces)
         }
-        
-        print(f"🎯 Sending response: {response_data}")
+       
+        response_data = {
+            "image_id": image_id,
+            "file_name": file.filename,
+            "file_url": f"/uploads/{file_name}",
+            "face_count": len(faces),
+            "faces": faces,
+            "upload_time": datetime.utcnow().isoformat()
+        }
+       
+        print(f"Returning response: {response_data}")
         return response_data
-        
-    except HTTPException:
-        raise
+       
     except Exception as e:
-        print(f"❌ Error processing image: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+        print(f"Upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-@app.get("/api/v1/images")
-async def get_images():
-    """Get list of uploaded images"""
-    return {
-        "images": [
-            {
-                "id": str(uuid.uuid4()),
-                "name": "sample1.jpg",
-                "upload_date": datetime.now().isoformat(),
-                "face_count": 2
-            }
-        ]
-    }
+@app.post("/api/v1/faces/compare")
+async def compare_faces(
+    image1: UploadFile = File(...),
+    image2: UploadFile = File(...),
+    threshold: float = Form(75.0)
+):
+    print("Comparing faces...")
+   
+    # Validate files
+    for file in [image1, image2]:
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Both files must be images")
+   
+    try:
+        # Read both files
+        await image1.read()
+        await image2.read()
+       
+        # Mock face comparison - always return a result for testing
+        similarity_score = 85.2
+        match_status = "MATCH" if similarity_score >= threshold else "NOT_MATCH"
+       
+        result = {
+            "similarity_score": similarity_score,
+            "threshold_used": threshold,
+            "match_status": match_status,
+            "probe_confidence": 0.99,
+            "candidate_confidence": 0.97,
+            "message": "Comparison completed successfully"
+        }
+       
+        print(f"Comparison result: {result}")
+        return result
+       
+    except Exception as e:
+        print(f"Comparison error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Comparison failed: {str(e)}")
 
-@app.post("/api/v1/compare")
-async def compare_faces(image1: UploadFile = File(...), image2: UploadFile = File(...)):
-    """Compare faces in two images"""
-    return {
-        "match": True,
-        "confidence": 0.89,
-        "message": "Faces match with high confidence"
-    }
+@app.get("/api/v1/images/my-images")
+async def get_my_images():
+    # Return all images for demo
+    return list(images_db.values())
 
-# Add a simple test endpoint
-@app.get("/api/v1/test")
-async def test_endpoint():
-    return {"message": "Test endpoint working!", "status": "success"}
+@app.get("/api/v1/users/profile")
+async def get_profile():
+    # Mock user profile - return first user or create one
+    if users_db:
+        user = list(users_db.values())[0]
+        return user
+    else:
+        # Create a mock user if none exists
+        user_id = str(uuid.uuid4())
+        mock_user = {
+            "id": user_id,
+            "email": "demo@example.com",
+            "api_key": "demo-api-key-123",
+            "threshold": 75.0,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        return mock_user
+
+@app.patch("/api/v1/users/threshold")
+async def update_threshold(threshold: float):
+    if threshold < 70 or threshold > 90:
+        raise HTTPException(status_code=422, detail="Threshold must be between 70 and 90")
+   
+    # Update first user's threshold for demo
+    if users_db:
+        user_id = list(users_db.keys())[0]
+        users_db[user_id]["threshold"] = threshold
+   
+    return {"message": "Threshold updated successfully", "new_threshold": threshold}
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0", 
-        port=8000,
-        reload=True
-    )
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
