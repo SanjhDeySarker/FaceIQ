@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import { imagesAPI, mockAPI, getErrorMessage } from '../api';
+import { imagesAPI, mockAPI, getErrorMessage, testConnection } from '../api';
 
 const Dashboard = () => {
   const [uploading, setUploading] = useState(false);
@@ -9,6 +9,27 @@ const Dashboard = () => {
   const [error, setError] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  const [backendStatus, setBackendStatus] = useState('checking');
+
+  // Test backend connection on component mount
+  useEffect(() => {
+    checkBackendConnection();
+  }, []);
+
+  const checkBackendConnection = async () => {
+    try {
+      setBackendStatus('checking');
+      const result = await testConnection();
+      if (result.success) {
+        setBackendStatus('connected');
+        setError('');
+      } else {
+        setBackendStatus('disconnected');
+      }
+    } catch (err) {
+      setBackendStatus('disconnected');
+    }
+  };
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -62,13 +83,20 @@ const Dashboard = () => {
       console.log('Starting upload...', selectedFile);
       
       let response;
-      try {
-        // Try real API first
-        response = await imagesAPI.upload(selectedFile);
-        console.log('Upload successful:', response.data);
-      } catch (apiError) {
-        console.warn('Real API failed, using mock data:', apiError);
-        // Fallback to mock API
+      if (backendStatus === 'connected') {
+        try {
+          // Try real API first
+          response = await imagesAPI.upload(selectedFile);
+          console.log('✅ Real API upload successful:', response.data);
+        } catch (apiError) {
+          console.warn('❌ Real API failed, using mock data:', apiError);
+          // Fallback to mock API
+          response = await mockAPI.upload(selectedFile);
+          console.log('🔄 Mock upload successful:', response.data);
+        }
+      } else {
+        // Use mock API directly when backend is disconnected
+        console.log('🔄 Backend disconnected, using mock API');
         response = await mockAPI.upload(selectedFile);
         console.log('Mock upload successful:', response.data);
       }
@@ -148,11 +176,15 @@ const Dashboard = () => {
         
         try {
           let response;
-          try {
-            response = await imagesAPI.upload(testFile);
-            console.log('Test upload successful:', response.data);
-          } catch (apiError) {
-            console.warn('Real API failed, using mock:', apiError);
+          if (backendStatus === 'connected') {
+            try {
+              response = await imagesAPI.upload(testFile);
+              console.log('✅ Test upload successful:', response.data);
+            } catch (apiError) {
+              console.warn('❌ Real API failed, using mock:', apiError);
+              response = await mockAPI.upload(testFile);
+            }
+          } else {
             response = await mockAPI.upload(testFile);
           }
           
@@ -173,6 +205,41 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Connection Status */}
+      <div className={`p-3 rounded-lg ${
+        backendStatus === 'connected' 
+          ? 'bg-green-50 border border-green-200 text-green-800'
+          : backendStatus === 'checking'
+          ? 'bg-blue-50 border border-blue-200 text-blue-800'
+          : 'bg-yellow-50 border border-yellow-200 text-yellow-800'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <div className={`w-3 h-3 rounded-full mr-2 ${
+              backendStatus === 'connected' 
+                ? 'bg-green-500' 
+                : backendStatus === 'checking'
+                ? 'bg-blue-500 animate-pulse'
+                : 'bg-yellow-500'
+            }`}></div>
+            <span className="font-medium">
+              {backendStatus === 'checking' 
+                ? 'Checking backend connection...' 
+                : `Backend: ${backendStatus === 'connected' ? 'Connected' : 'Disconnected'}`
+              }
+            </span>
+          </div>
+          <Button variant="outline" size="sm" onClick={checkBackendConnection} disabled={backendStatus === 'checking'}>
+            {backendStatus === 'checking' ? 'Checking...' : 'Retry Connection'}
+          </Button>
+        </div>
+        {backendStatus === 'disconnected' && (
+          <p className="text-sm mt-1">
+            Running in mock mode. Some features may be limited.
+          </p>
+        )}
+      </div>
+
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <Button 
