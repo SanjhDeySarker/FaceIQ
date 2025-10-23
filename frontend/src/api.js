@@ -5,13 +5,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 // Create axios instance with better error handling
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000,
+  timeout: 30000,
 });
 
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    console.log(`🔄 API Call: ${config.method?.toUpperCase()} ${config.url}`);
+    console.log(`🔄 API Call: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -39,13 +39,13 @@ api.interceptors.response.use(
     });
     
     if (error.code === 'ECONNABORTED') {
-      error.message = 'Request timeout. Please check if the backend is running.';
+      error.message = 'Request timeout - Backend might be down';
     } else if (error.response?.status === 404) {
-      error.message = 'API endpoint not found. Please check the backend server.';
+      error.message = 'Endpoint not found: ' + error.config.url;
     } else if (error.response?.status === 500) {
-      error.message = 'Server error. Please check backend logs.';
+      error.message = 'Server error - Check backend logs';
     } else if (!error.response) {
-      error.message = 'Cannot connect to server. Make sure backend is running on http://localhost:8000';
+      error.message = 'Cannot connect to backend server - Make sure it\'s running on http://localhost:8000';
     }
     
     return Promise.reject(error);
@@ -55,9 +55,12 @@ api.interceptors.response.use(
 // Test backend connection
 export const testConnection = async () => {
   try {
+    console.log('🔍 Testing backend connection...');
     const response = await api.get('/health');
+    console.log('✅ Backend connection successful:', response.data);
     return { success: true, data: response.data };
   } catch (error) {
+    console.error('❌ Backend connection failed:', error.message);
     return { 
       success: false, 
       error: getErrorMessage(error),
@@ -66,7 +69,7 @@ export const testConnection = async () => {
   }
 };
 
-// Images API
+// Images API - CORRECTED ENDPOINTS
 export const imagesAPI = {
   upload: async (file) => {
     console.log('📤 Starting file upload:', file.name, file.size, file.type);
@@ -74,16 +77,22 @@ export const imagesAPI = {
     const formData = new FormData();
     formData.append('file', file);
     
-    return api.post('/images/upload', formData, {
+    return api.post('/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 60000,
+      timeout: 30000,
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          console.log(`📊 Upload Progress: ${percentCompleted}%`);
+        }
+      }
     });
   },
 
   getMyImages: async () => {
-    return api.get('/images/my-images');
+    return api.get('/images');
   },
 };
 
@@ -95,7 +104,7 @@ export const facesAPI = {
     formData.append('image2', image2);
     formData.append('threshold', threshold.toString());
     
-    return api.post('/faces/compare', formData, {
+    return api.post('/compare', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -103,55 +112,19 @@ export const facesAPI = {
   },
 };
 
-// Users API - ADDED THIS MISSING EXPORT
+// Users API
 export const usersAPI = {
   getProfile: async () => {
-    return api.get('/users/profile');
+    return api.get('/users/me');
   },
-
-  updateProfile: async (userData) => {
-    return api.put('/users/profile', userData);
-  },
-
-  changePassword: async (currentPassword, newPassword) => {
-    return api.put('/users/change-password', {
-      current_password: currentPassword,
-      new_password: newPassword
-    });
-  },
-
-  deleteAccount: async () => {
-    return api.delete('/users/account');
-  },
-
-  getUsageStats: async () => {
-    return api.get('/users/usage-stats');
-  }
 };
 
 // Authentication API
 export const authAPI = {
   login: async (email, password) => {
-    const formData = new URLSearchParams();
-    formData.append('username', email);
-    formData.append('password', password);
-    
-    return api.post('/auth/login', formData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
-  },
-
-  register: async (userData) => {
-    const formData = new URLSearchParams();
-    formData.append('email', userData.email);
-    formData.append('password', userData.password);
-    
-    return api.post('/auth/register', formData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+    return api.post('/auth/login', {
+      email: email,
+      password: password
     });
   },
 };
@@ -159,59 +132,32 @@ export const authAPI = {
 // Mock API for fallback
 export const mockAPI = {
   upload: async (file) => {
-    console.log('🔄 Using mock upload API');
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          data: {
-            image_id: 'mock_img_' + Date.now(),
-            file_name: file.name,
-            file_url: '/uploads/mock.jpg',
-            face_count: 2,
-            faces: [
-              {
-                face_id: 'face_1',
-                bbox: [100, 100, 200, 200],
-                confidence: 0.98,
-                age: 25,
-                gender: 'male',
-                quality: 0.9
-              },
-              {
-                face_id: 'face_2', 
-                bbox: [400, 150, 180, 180],
-                confidence: 0.96,
-                age: 30,
-                gender: 'female',
-                quality: 0.8
-              }
-            ],
-            upload_time: new Date().toISOString(),
-            message: 'Mock upload successful - Backend might be down'
-          }
-        });
-      }, 1500);
-    });
-  },
-
-  // Mock users API for fallback
-  users: {
-    getProfile: async () => {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            data: {
-              id: 'mock_user_1',
-              email: 'demo@example.com',
-              created_at: new Date().toISOString(),
-              image_count: 5,
-              face_detection_count: 12,
-              subscription: 'free'
-            }
-          });
-        }, 1000);
-      });
-    }
+    console.log('🔄 Using mock upload API - Backend might be unavailable');
+    
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    const faceCount = Math.floor(Math.random() * 3) + 1;
+    const faces = Array.from({ length: faceCount }, (_, i) => ({
+      face_id: `mock_face_${Date.now()}_${i}`,
+      bbox: [50 + i * 150, 50, 120, 120],
+      confidence: 0.85 + Math.random() * 0.1,
+      age: 20 + Math.floor(Math.random() * 40),
+      gender: Math.random() > 0.5 ? 'male' : 'female',
+      quality: 0.7 + Math.random() * 0.2,
+    }));
+    
+    return {
+      data: {
+        image_id: `mock_img_${Date.now()}`,
+        file_name: file.name,
+        file_size: file.size,
+        file_url: `mock://uploads/${file.name}`,
+        face_count: faceCount,
+        faces: faces,
+        upload_time: new Date().toISOString(),
+        message: 'Mock analysis complete - Backend server might be down'
+      }
+    };
   }
 };
 
