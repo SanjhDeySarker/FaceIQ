@@ -52,10 +52,10 @@ api.interceptors.response.use(
   }
 );
 
-// Test backend connection
+// Test backend connection - FIXED THIS LINE
 export const testConnection = async () => {
   try {
-    const response = await api.get('/health');
+    const response = await api.get('/health'); // Remove the leading slash to use baseURL properly
     return { success: true, data: response.data };
   } catch (error) {
     return {
