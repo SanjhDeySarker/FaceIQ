@@ -22,11 +22,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve uploaded files statically
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-
-# Create uploads directory if it doesn't exist
+# FIX: Create uploads directory FIRST, before mounting it
 os.makedirs("uploads", exist_ok=True)
+
+# FIX: Now mount the static files directory AFTER creating it
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # In-memory storage (replace with database later)
 users_db = {}
